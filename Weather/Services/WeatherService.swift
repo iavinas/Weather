@@ -30,10 +30,14 @@ class WeatherService {
         
         // Fetch new data
         print("Fetching fresh weather data for \(location)")
-        async let weather = fetchCurrentWeather(for: location)
-        async let forecast = fetch5DayForecast(for: location)
         
         do {
+            async let weather = fetchCurrentWeather(for: location)
+            async let forecast = fetch5DayForecast(for: location)
+            
+            // Check for cancellation before proceeding
+            try await Task.checkCancellation()
+            
             let (weatherData, forecastData) = try await (weather, forecast)
             
             // Update cache
@@ -45,6 +49,8 @@ class WeatherService {
             )
             
             return (weatherData, forecastData)
+        } catch is CancellationError {
+            throw CancellationError()
         } catch {
             cache = nil // Invalidate cache on error
             throw error
@@ -59,7 +65,7 @@ class WeatherService {
               let url = URL(string: "\(baseURL)/weather?q=\(encodedCity)&appid=\(apiKey)&units=metric") else {
             throw WeatherError.invalidURL
         }
-        
+                
         let (data, response) = try await URLSession.shared.data(from: url)
         
         if let httpResponse = response as? HTTPURLResponse {
@@ -83,6 +89,8 @@ class WeatherService {
             throw WeatherError.invalidURL
         }
         
+        print(url)
+        
         let (data, response) = try await URLSession.shared.data(from: url)
         
         if let httpResponse = response as? HTTPURLResponse {
@@ -105,9 +113,12 @@ class WeatherService {
     }
     
     func shouldRefresh(for location: String) -> Bool {
-        guard let cache = cache else { return true }
-        return cache.location.lowercased() != location.lowercased() ||
-               Date().timeIntervalSince(cache.timestamp) >= cacheTimeout
+        guard let cache = cache,
+              cache.location.lowercased() == location.lowercased() else {
+            return true
+        }
+        
+        return Date().timeIntervalSince(cache.timestamp) >= cacheTimeout
     }
 }
 

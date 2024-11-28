@@ -3,9 +3,10 @@ import SwiftUI
 struct SettingsView: View {
     @EnvironmentObject private var themeManager: ThemeManager
     @Environment(\.dismiss) private var dismiss
-    @State private var locations: [String] = ["Bangalore", "London"]
-    @State private var newLocation: String = ""
+    @AppStorage("savedLocations") private var savedLocations = "Bangalore,London"  // Default cities
     @AppStorage("defaultLocation") private var defaultLocation: String = "Bangalore"
+    @State private var locations: [String] = []
+    @State private var newLocation: String = ""
     @State private var showingDeleteAlert = false
     @State private var locationToDelete: String?
     @State private var showingErrorAlert = false
@@ -40,6 +41,9 @@ struct SettingsView: View {
             Button("OK", role: .cancel) { }
         } message: {
             Text(errorMessage)
+        }
+        .onAppear {
+            loadLocations()
         }
     }
     
@@ -95,7 +99,21 @@ struct SettingsView: View {
         .padding(.bottom)
     }
     
-    // MARK: - Supporting Views
+    // MARK: - Helper Functions
+    
+    private func loadLocations() {
+        locations = savedLocations.split(separator: ",").map(String.init)
+        if locations.isEmpty {
+            // Ensure we always have at least one location
+            locations = ["Bangalore"]
+            saveLocations()
+        }
+    }
+    
+    private func saveLocations() {
+        savedLocations = locations.joined(separator: ",")
+    }
+    
     private func addLocation() {
         let trimmedLocation = newLocation.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedLocation.isEmpty else { return }
@@ -106,8 +124,9 @@ struct SettingsView: View {
             return
         }
         
-        withAnimation {
+        withAnimation(.easeInOut(duration: 0.2)) {
             locations.append(trimmedLocation)
+            saveLocations()
             newLocation = ""
             
             // If this is the first location, set it as default
@@ -124,15 +143,16 @@ struct SettingsView: View {
             return
         }
         
-        withAnimation {
+        withAnimation(.easeInOut(duration: 0.2)) {
             if let index = locations.firstIndex(of: location) {
                 locations.remove(at: index)
+                saveLocations()
             }
         }
     }
     
     private func setDefaultLocation(_ location: String) {
-        withAnimation {
+        withAnimation(.easeInOut(duration: 0.2)) {
             defaultLocation = location
         }
     }

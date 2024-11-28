@@ -27,35 +27,39 @@ struct RefreshIndicator: View {
     
     var body: some View {
         if isRefreshing || lastUpdated != nil {
-            VStack(spacing: 4) {
-                if isRefreshing {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: theme.textColor))
-                        .scaleEffect(0.8)
+            TimelineView(.periodic(from: .now, by: 1.0)) { timeline in
+                VStack(spacing: 4) {
+                    if isRefreshing {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: theme.textColor))
+                            .scaleEffect(0.8)
+                    }
+                    
+                    if let lastUpdated = lastUpdated {
+                        Text("Last updated: \(timeAgoString(from: lastUpdated))")
+                            .font(.caption2)
+                            .foregroundColor(theme.textColor.opacity(0.8))
+                    }
                 }
-                
-                if let lastUpdated = lastUpdated {
-                    Text("Last updated: \(timeAgoString(from: lastUpdated))")
-                        .font(.caption2)
-                        .foregroundColor(theme.textColor.opacity(0.8))
-                }
+                .padding(.top, 8)
             }
-            .padding(.top, 8)
         }
     }
     
     private func timeAgoString(from date: Date) -> String {
-        let minutes = Int(-date.timeIntervalSinceNow / 60)
-        if minutes < 1 {
+        let interval = -date.timeIntervalSinceNow
+        
+        if interval < 1 {
             return "Just now"
-        } else if minutes == 1 {
-            return "1 minute ago"
-        } else if minutes < 60 {
-            return "\(minutes) minutes ago"
-        } else if minutes < 120 {
-            return "1 hour ago"
+        } else if interval < 60 {
+            let seconds = Int(interval)
+            return "\(seconds) second\(seconds == 1 ? "" : "s") ago"
+        } else if interval < 3600 {
+            let minutes = Int(interval / 60)
+            return "\(minutes) minute\(minutes == 1 ? "" : "s") ago"
         } else {
-            return "\(minutes / 60) hours ago"
+            let hours = Int(interval / 3600)
+            return "\(hours) hour\(hours == 1 ? "" : "s") ago"
         }
     }
 }
@@ -106,6 +110,8 @@ struct ContentView: View {
     @State private var previousLocation: String = ""
     @State private var lastUpdated: Date?
     @State private var isRefreshing = false
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var refreshTask: Task<Void, Never>?
     
     private let weatherService = WeatherService()
     
@@ -206,9 +212,21 @@ struct ContentView: View {
                             .padding(.top)
                         }
                         .refreshable {
-                            isRefreshing = true
-                            await fetchWeather(forceFetch: true)
-                            isRefreshing = false
+                            // Cancel any existing refresh task
+                            refreshTask?.cancel()
+                            
+                            // Create new refresh task
+                            refreshTask = Task {
+                                isRefreshing = true
+                                do {
+                                    try await Task.sleep(nanoseconds: 500_000_000) // 0.5 second minimum refresh time
+                                    await fetchWeather(forceFetch: true)
+                                } catch {}
+                                isRefreshing = false
+                            }
+                            
+                            // Wait for the refresh task to complete
+                            await refreshTask?.value
                         }
                     }
                 }
@@ -236,6 +254,11 @@ struct ContentView: View {
                         await fetchWeather(forceFetch: true)
                     }
                 }
+            }
+        }
+        .onChange(of: scenePhase) { oldPhase, newPhase in
+            if newPhase == .active {
+                checkAndUpdateWeather()
             }
         }
     }
@@ -268,6 +291,9 @@ struct ContentView: View {
                 forceFetch: forceFetch
             )
             
+            // Check if the task was cancelled
+            try Task.checkCancellation()
+            
             withAnimation {
                 weatherData = weather
                 forecastData = forecast
@@ -277,6 +303,9 @@ struct ContentView: View {
                     themeManager.updateThemeBasedOnWeather(icon)
                 }
             }
+        } catch is CancellationError {
+            // Ignore cancellation errors
+            print("Weather fetch cancelled")
         } catch {
             self.error = error
             print("Error fetching weather: \(error)")

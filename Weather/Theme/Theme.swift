@@ -15,7 +15,7 @@ enum Theme {
         switch self {
         case .light:
             return LinearGradient(
-                gradient: Gradient(colors: [.blue, Color("lightBlue")]),
+                gradient: Gradient(colors: [.blue, Color("lightBlue").opacity(0.8)]),
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
