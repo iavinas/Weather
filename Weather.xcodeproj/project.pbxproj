@@ -54,6 +54,7 @@
 		0C3DBDB22CF8CCA50086DDAF /* Exceptions for "Weather" folder in "WeatherWidgetExtension" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				Config/Secrets.xcconfig,
 				Models/ForecastModel.swift,
 				Models/WeatherModel.swift,
 				Resources/Assets.xcassets,
